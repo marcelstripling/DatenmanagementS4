@@ -12,14 +12,6 @@ st.markdown("**Vergleich von Gas- und Strompreisen** (inkl. Steuern & Abgaben) i
 # ── Gaspreise ─────────────────────────────────────────────────────────────
 gas_csv = """Unit;Tax;Currency;Geo;Time period;€/kWh;EU?
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2020-S2;0.0656;WAHR
-... [Bitte hier deinen vollständigen Gas-Datensatz einfügen] ..."""
-
-# ── Strompreise ───────────────────────────────────────────────────────────
-strom_csv = """Energie;Unit;Tax;Currency;Geo;Zeit;Preis
-Electricity;Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S2;0.2252
-# ── Gaspreise ─────────────────────────────────────────────────────────────
-gas_csv = """Unit;Tax;Currency;Geo;Time period;€/kWh;EU?
-Kilowatt-hour;All taxes and levies included;Euro;Austria;2020-S2;0.0656;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S1;0.0636;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S2;0.0695;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2022-S1;0.0767;WAHR
