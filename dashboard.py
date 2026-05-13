@@ -9,7 +9,7 @@ st.set_page_config(page_title="Gas & Strompreise Vergleich 2020-2025", layout="w
 st.title("Gas- & Strompreise für Haushaltskunden 2020–2025")
 st.markdown("**Vergleich von Gas- und Strompreisen** (inkl. Steuern & Abgaben) in €/kWh – Halbjahreswerte")
 
-# ── Gaspreise (vollständiger Datensatz) ─────────────────────────────────────
+# ── Gaspreise ─────────────────────────────────────────────────────────────
 gas_csv = """Unit;Tax;Currency;Geo;Time period;€/kWh;EU?
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2020-S2;0.0656;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S1;0.0636;WAHR
@@ -249,7 +249,7 @@ Kilowatt-hour;All taxes and levies included;Euro;Slovakia;2024-S1;0.0585;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Slovakia;2024-S2;0.0600;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Slovakia;2025-S1;0.0587;WAHR"""
 
-# ── Strompreise (Elektrizität) ────────────────────────────────────────────
+# ── Strompreise ───────────────────────────────────────────────────────────
 strom_csv = """Energie;Unit;Tax;Currency;Geo;Zeit;Preis
 Electricity;Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S2;0.2252
 Electricity;Kilowatt-hour;All taxes and levies included;Euro;Austria;2022-S1;0.2200
@@ -471,19 +471,16 @@ Electricity;Kilowatt-hour;All taxes and levies included;Euro;Slovakia;2025-S2;0.
 
 @st.cache_data
 def load_data():
-    # Gas laden
     gas = pd.read_csv(StringIO(gas_csv), sep=";", decimal=".")
     gas = gas.dropna(subset=["€/kWh"])
     gas["Energie"] = "Gas"
     gas = gas.rename(columns={"Time period": "Zeit"})
-    
-    # Strom laden
+
     strom = pd.read_csv(StringIO(strom_csv), sep=";", decimal=".")
     strom = strom.dropna(subset=["Preis"])
     strom = strom.rename(columns={"Preis": "€/kWh", "Zeit": "Zeit"})
     strom["Energie"] = "Strom"
-    
-    # Zusammenführen
+
     df = pd.concat([gas, strom], ignore_index=True)
     df["Zeit"] = df["Zeit"].str.replace("-S", " H")
     return df
@@ -498,47 +495,31 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "4. Boxplot Vergleich"
 ])
 
-# Tab 1: Preisverlauf
+# Tab 1
 with tab1:
     st.subheader("1. Preisverlauf Gas vs Strom pro Land")
     selected_country = st.selectbox("Land auswählen", countries, index=countries.index("Germany") if "Germany" in countries else 0, key="t1")
     df_land = df[df["Geo"] == selected_country]
-    
-    fig1 = px.line(
-        df_land,
-        x="Zeit",
-        y="€/kWh",
-        color="Energie",
-        markers=True,
-        title=f"Gas- und Strompreisentwicklung – {selected_country}",
-        color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"},
-        height=550
-    )
+    fig1 = px.line(df_land, x="Zeit", y="€/kWh", color="Energie", markers=True,
+                   title=f"Gas- und Strompreisentwicklung – {selected_country}",
+                   color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"}, height=550)
     fig1.update_layout(xaxis_title="Zeitraum", yaxis_title="€/kWh", template="plotly_white")
     st.plotly_chart(fig1, use_container_width=True)
 
-# Tab 2: Durchschnitt & Median
+# Tab 2
 with tab2:
     st.subheader("2. Durchschnitt und Median pro Land")
     summary = df.groupby(["Geo", "Energie"])["€/kWh"].agg(Durchschnitt='mean', Median='median').reset_index()
     summary_melt = summary.melt(id_vars=["Geo", "Energie"], value_vars=["Durchschnitt", "Median"], var_name="Maß", value_name="€/kWh")
-    
-    fig2 = px.bar(
-        summary_melt,
-        x="Geo",
-        y="€/kWh",
-        color="Energie",
-        barmode="group",
-        facet_col="Maß",
-        title="Durchschnitt und Median – Gas vs Strom",
-        height=600,
-        color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"}
-    )
+    fig2 = px.bar(summary_melt, x="Geo", y="€/kWh", color="Energie", barmode="group", 
+                  facet_col="Maß", title="Durchschnitt und Median – Gas vs Strom", height=600,
+                  color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"})
     st.plotly_chart(fig2, use_container_width=True)
 
-# Tab 3: Ausreißer
+# Tab 3 – Ausreißer (korrigiert)
 with tab3:
     st.subheader("3. Ausreißer-Analyse Gas vs Strom")
+    
     st.markdown("""
     **Hinweis zur Ausreißer-Definition:**  
     Als mögliche Ausreißer gelten Werte mit einer Abweichung von **20–30 %**.  
@@ -550,28 +531,49 @@ with tab3:
     threshold_pct = st.slider("Mindest-Abweichung vom Mittelwert", 5.0, 100.0, 20.0, 2.5, format="%.1f %%")
     
     df_c3 = df[df["Geo"] == selected_country_3].copy()
-    for energie in ["Gas", "Strom"]:
-        mask = df_c3["Energie"] == energie
-        if mask.any():
-            mean_val = df_c3.loc[mask, "€/kWh"].mean()
-            df_c3.loc[mask, "Abweichung_%"] = ((df_c3.loc[mask, "€/kWh"] - mean_val) / mean_val * 100).round(1)
-            df_c3.loc[mask, "Abs_Abweichung"] = df_c3.loc[mask, "Abweichung_%"].abs()
     
-    # Weitere Logik kann hier ergänzt werden
+    if not df_c3.empty:
+        for energie in ["Gas", "Strom"]:
+            mask = df_c3["Energie"] == energie
+            if mask.any():
+                mean_val = df_c3.loc[mask, "€/kWh"].mean()
+                df_c3.loc[mask, "Abweichung_%"] = ((df_c3.loc[mask, "€/kWh"] - mean_val) / mean_val * 100).round(1)
+                df_c3.loc[mask, "Abs_Abweichung"] = df_c3.loc[mask, "Abweichung_%"].abs()
+        
+        df_c3["Ausreißer"] = "normal"
+        df_c3.loc[df_c3["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"positiv ≥ +{threshold_pct}%"
+        df_c3.loc[df_c3["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"negativ ≤ -{threshold_pct}%"
+        
+        color_map = {"normal": "#95a5a6", f"positiv ≥ +{threshold_pct}%": "#e74c3c", f"negativ ≤ -{threshold_pct}%": "#3498db"}
+        
+        fig3 = px.scatter(
+            df_c3,
+            x="Zeit",
+            y="€/kWh",
+            color="Ausreißer",
+            size="Abs_Abweichung",
+            size_max=20,
+            hover_data=["Abweichung_%"],
+            title=f"Ausreißer in {selected_country_3} (Schwelle ±{threshold_pct}%)",
+            height=550,
+            color_discrete_map=color_map
+        )
+        
+        st.plotly_chart(fig3, use_container_width=True)
+        
+        outliers = df_c3[df_c3["Ausreißer"] != "normal"]
+        if not outliers.empty:
+            st.info(f"{len(outliers)} Ausreißer gefunden bei ±{threshold_pct}% Schwelle")
+            st.dataframe(outliers[["Energie", "Zeit", "€/kWh", "Abweichung_%", "Ausreißer"]].sort_values("Abweichung_%", ascending=False), hide_index=True)
+        else:
+            st.success("Keine Ausreißer bei dieser Schwelle gefunden.")
 
-# Tab 4: Boxplot
+# Tab 4 – Boxplot
 with tab4:
     st.subheader("4. Boxplot – Preisverteilung Gas vs Strom")
-    fig4 = px.box(
-        df,
-        x="Geo",
-        y="€/kWh",
-        color="Energie",
-        points="outliers",
-        title="Vergleich der Preisverteilung: Gas vs Strom pro Land",
-        height=650,
-        color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"}
-    )
+    fig4 = px.box(df, x="Geo", y="€/kWh", color="Energie", points="outliers",
+                  title="Preisverteilung pro Land – Gas vs Strom",
+                  height=650, color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"})
     fig4.update_layout(xaxis_title="Land", yaxis_title="€/kWh", template="plotly_white")
     st.plotly_chart(fig4, use_container_width=True)
 
