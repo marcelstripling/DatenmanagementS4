@@ -12,6 +12,14 @@ st.markdown("**Vergleich von Gas- und Strompreisen** (inkl. Steuern & Abgaben) i
 # ── Gaspreise ─────────────────────────────────────────────────────────────
 gas_csv = """Unit;Tax;Currency;Geo;Time period;€/kWh;EU?
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2020-S2;0.0656;WAHR
+... [Bitte hier deinen vollständigen Gas-Datensatz einfügen] ..."""
+
+# ── Strompreise ───────────────────────────────────────────────────────────
+strom_csv = """Energie;Unit;Tax;Currency;Geo;Zeit;Preis
+Electricity;Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S2;0.2252
+# ── Gaspreise ─────────────────────────────────────────────────────────────
+gas_csv = """Unit;Tax;Currency;Geo;Time period;€/kWh;EU?
+Kilowatt-hour;All taxes and levies included;Euro;Austria;2020-S2;0.0656;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S1;0.0636;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2021-S2;0.0695;WAHR
 Kilowatt-hour;All taxes and levies included;Euro;Austria;2022-S1;0.0767;WAHR
@@ -491,7 +499,7 @@ countries = sorted(df["Geo"].unique())
 tab1, tab2, tab3, tab4 = st.tabs([
     "1. Preisverlauf pro Land",
     "2. Durchschnitt & Median",
-    "3. Ausreißer-Analyse",
+    "3. Ausreißer-Analyse Gas vs Strom",
     "4. Boxplot Vergleich"
 ])
 
@@ -516,7 +524,7 @@ with tab2:
                   color_discrete_map={"Gas": "#1f77b4", "Strom": "#ff7f0e"})
     st.plotly_chart(fig2, use_container_width=True)
 
-# Tab 3 – Ausreißer (korrigiert)
+# Tab 3 – Ausreißer (getrennt für Gas und Strom)
 with tab3:
     st.subheader("3. Ausreißer-Analyse Gas vs Strom")
     
@@ -524,49 +532,63 @@ with tab3:
     **Hinweis zur Ausreißer-Definition:**  
     Als mögliche Ausreißer gelten Werte mit einer Abweichung von **20–30 %**.  
     Ab **50 %** Abweichung handelt es sich fast immer um starke Ausreißer.  
-    Die Abweichung wird vom **Mittelwert** des jeweiligen Energieträgers berechnet.
+    Die Abweichung wird vom **Mittelwert** des jeweiligen Energieträgers (Gas oder Strom) berechnet.
     """)
     
     selected_country_3 = st.selectbox("Land auswählen", countries, index=countries.index("Germany") if "Germany" in countries else 0, key="t3")
     threshold_pct = st.slider("Mindest-Abweichung vom Mittelwert", 5.0, 100.0, 20.0, 2.5, format="%.1f %%")
     
-    df_c3 = df[df["Geo"] == selected_country_3].copy()
+    df_land = df[df["Geo"] == selected_country_3].copy()
     
-    if not df_c3.empty:
-        for energie in ["Gas", "Strom"]:
-            mask = df_c3["Energie"] == energie
-            if mask.any():
-                mean_val = df_c3.loc[mask, "€/kWh"].mean()
-                df_c3.loc[mask, "Abweichung_%"] = ((df_c3.loc[mask, "€/kWh"] - mean_val) / mean_val * 100).round(1)
-                df_c3.loc[mask, "Abs_Abweichung"] = df_c3.loc[mask, "Abweichung_%"].abs()
+    if not df_land.empty:
+        col1, col2 = st.columns(2)
         
-        df_c3["Ausreißer"] = "normal"
-        df_c3.loc[df_c3["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"positiv ≥ +{threshold_pct}%"
-        df_c3.loc[df_c3["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"negativ ≤ -{threshold_pct}%"
-        
-        color_map = {"normal": "#95a5a6", f"positiv ≥ +{threshold_pct}%": "#e74c3c", f"negativ ≤ -{threshold_pct}%": "#3498db"}
-        
-        fig3 = px.scatter(
-            df_c3,
-            x="Zeit",
-            y="€/kWh",
-            color="Ausreißer",
-            size="Abs_Abweichung",
-            size_max=20,
-            hover_data=["Abweichung_%"],
-            title=f"Ausreißer in {selected_country_3} (Schwelle ±{threshold_pct}%)",
-            height=550,
-            color_discrete_map=color_map
-        )
-        
-        st.plotly_chart(fig3, use_container_width=True)
-        
-        outliers = df_c3[df_c3["Ausreißer"] != "normal"]
-        if not outliers.empty:
-            st.info(f"{len(outliers)} Ausreißer gefunden bei ±{threshold_pct}% Schwelle")
-            st.dataframe(outliers[["Energie", "Zeit", "€/kWh", "Abweichung_%", "Ausreißer"]].sort_values("Abweichung_%", ascending=False), hide_index=True)
-        else:
-            st.success("Keine Ausreißer bei dieser Schwelle gefunden.")
+        for idx, energie in enumerate(["Gas", "Strom"]):
+            df_energie = df_land[df_land["Energie"] == energie].copy()
+            
+            if df_energie.empty:
+                continue
+                
+            mean_val = df_energie["€/kWh"].mean()
+            df_energie["Abweichung_%"] = ((df_energie["€/kWh"] - mean_val) / mean_val * 100).round(1)
+            df_energie["Abs_Abweichung"] = df_energie["Abweichung_%"].abs()
+            
+            df_energie["Ausreißer"] = "normal"
+            df_energie.loc[df_energie["Abweichung_%"] >= threshold_pct, "Ausreißer"] = f"≥ +{threshold_pct}%"
+            df_energie.loc[df_energie["Abweichung_%"] <= -threshold_pct, "Ausreißer"] = f"≤ -{threshold_pct}%"
+            
+            color_map = {"normal": "#95a5a6", f"≥ +{threshold_pct}%": "#e74c3c", f"≤ -{threshold_pct}%": "#3498db"}
+            
+            fig = px.scatter(
+                df_energie,
+                x="Zeit",
+                y="€/kWh",
+                color="Ausreißer",
+                size="Abs_Abweichung",
+                size_max=20,
+                title=f"{energie} – {selected_country_3}",
+                color_discrete_map=color_map,
+                height=500
+            )
+            
+            fig.add_hline(y=mean_val, line_dash="dot", line_color="black", 
+                         annotation_text=f"Mittel: {mean_val:.4f}")
+            fig.add_hline(y=mean_val * (1 + threshold_pct/100), line_dash="dash", line_color="red")
+            fig.add_hline(y=mean_val * (1 - threshold_pct/100), line_dash="dash", line_color="blue")
+            
+            fig.update_layout(template="plotly_white", legend_title="Ausreißer")
+            
+            with (col1 if idx == 0 else col2):
+                st.plotly_chart(fig, use_container_width=True)
+                
+                outliers = df_energie[df_energie["Ausreißer"] != "normal"]
+                if not outliers.empty:
+                    st.caption(f"{len(outliers)} Ausreißer bei {energie}")
+                    st.dataframe(outliers[["Zeit", "€/kWh", "Abweichung_%", "Ausreißer"]].sort_values("Abweichung_%", ascending=False), hide_index=True)
+                else:
+                    st.caption(f"Keine Ausreißer bei {energie}")
+    else:
+        st.warning("Keine Daten für dieses Land.")
 
 # Tab 4 – Boxplot
 with tab4:
